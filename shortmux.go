@@ -363,8 +363,22 @@ func (mux *ServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	var h http.Handler
-	h, r.Pattern, r.pat, matches = mux.findHandler(r)
+	h, pattern, pat, matches := mux.findHandler(r)
+	r.Pattern = pattern
+	for _, p := range pat.segments {
+		if p.wild {
+			// If the segment is a wildcard, set the path value in the request.
+			// The wildcard name is in p.s.
+			if p.s != "" {
+				r.SetPathValue(p.s, matches[0]) // matches[0] is the first match for this segment
+				matches = matches[1:]           // remove the first match since it was used
+			} else if p.multi {
+				// Multi wildcard, set the rest of matches as a single value
+				r.SetPathValue("...", strings.Join(matches, "/"))
+				matches = nil // all matches consumed
+			}
+		}
+	}
 	h.ServeHTTP(w, r)
 }
 
