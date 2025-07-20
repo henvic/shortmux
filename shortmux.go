@@ -23,6 +23,10 @@ import (
 // patterns and calls the handler for the pattern that
 // most closely matches the URL.
 //
+// Unlike the standard library's http.ServeMux, this implementation allows
+// overlapping patterns and resolves conflicts by selecting the most
+// specific match for each request.
+//
 // # Patterns
 //
 // Patterns can match the method, host and path of a request.
@@ -77,15 +81,10 @@ import (
 //
 // # Precedence
 //
-// If two or more patterns match a request, then the most specific pattern takes precedence.
-// A pattern P1 is more specific than P2 if P1 matches a strict subset of P2’s requests;
-// that is, if P2 matches all the requests of P1 and more.
-// If neither is more specific, then the patterns conflict.
-// There is one exception to this rule, for backwards compatibility:
-// if two patterns would otherwise conflict and one has a host while the other does not,
-// then the pattern with the host takes precedence.
-// If a pattern passed to [ServeMux.Handle] or [ServeMux.HandleFunc] conflicts with
-// another pattern that is already registered, those functions panic.
+// When multiple patterns could match a request, the most specific pattern wins.
+// For example, with patterns "/a/{b}" and "/{c}/d", a request to "/a/foo" will
+// match "/a/{b}" because the literal "a" is more specific than the wildcard {c}.
+// A request to "/bar/d" will match "/{c}/d".
 //
 // As an example of the general rule, "/images/thumbnails/" is more specific than "/images/",
 // so both can be registered.
@@ -96,7 +95,7 @@ import (
 // both match a GET request for "/index.html", but the former pattern
 // matches all other GET and HEAD requests, while the latter matches any
 // request for "/index.html" that uses a different method.
-// The patterns conflict.
+// Unlike on the standard library, these patterns can coexist without conflict.
 //
 // # Trailing-slash redirection
 //
@@ -421,7 +420,7 @@ func (mux *ServeMux) registerErr(patstr string, handler http.Handler) error {
 		return fmt.Errorf("parsing %q: %w", patstr, err)
 	}
 
-	// Get the caller's location, for better conflict error messages.
+	// Get the caller's location, for better error messages.
 	// Skip register and whatever calls it.
 	_, file, line, ok := runtime.Caller(3)
 	if !ok {
@@ -432,17 +431,7 @@ func (mux *ServeMux) registerErr(patstr string, handler http.Handler) error {
 
 	mux.mu.Lock()
 	defer mux.mu.Unlock()
-	// Check for conflict.
-	if err := mux.index.possiblyConflictingPatterns(pat, func(pat2 *pattern) error {
-		if pat.conflictsWith(pat2) {
-			d := describeConflict(pat, pat2)
-			return fmt.Errorf("pattern %q (registered at %s) conflicts with pattern %q (registered at %s):\n%s",
-				pat, pat.loc, pat2, pat2.loc, d)
-		}
-		return nil
-	}); err != nil {
-		return err
-	}
+	// No conflict checking - differently than http.ServeMux, allow overlapping patterns
 	mux.tree.addPattern(pat, handler)
 	mux.index.addPattern(pat)
 	return nil

@@ -29,6 +29,8 @@ func TestFindHandler(t *testing.T) {
 		{"/foo", &handler{3}},
 		{"/bar/", &handler{4}},
 		{"//foo", &handler{5}},
+		{"/x/{y}", &handler{6}},
+		{"/{i}/j", &handler{7}},
 	} {
 		mux.Handle(ph.pat, ph.h)
 	}
@@ -44,6 +46,9 @@ func TestFindHandler(t *testing.T) {
 		{"GET", "/foo", "&shortmux.handler{i:3}"},
 		{"GET", "/foo/x", "&shortmux.handler{i:2}"},
 		{"GET", "/bar/x", "&shortmux.handler{i:4}"},
+		{"GET", "/x/abc", "&shortmux.handler{i:6}"},
+		{"GET", "/def/j", "&shortmux.handler{i:7}"},
+		{"POST", "/def/j", "&shortmux.handler{i:7}"},
 		{"GET", "/bar", `&http.redirectHandler{url:"/bar/", code:301}`},
 		{"CONNECT", "/", "&shortmux.handler{i:1}"},
 		{"CONNECT", "//", "&shortmux.handler{i:1}"},
@@ -83,7 +88,6 @@ func TestEmptyServeMux(t *testing.T) {
 func TestRegisterErr(t *testing.T) {
 	mux := NewServeMux()
 	h := &handler{}
-	mux.Handle("/a", h)
 
 	for _, test := range []struct {
 		pattern    string
@@ -94,7 +98,6 @@ func TestRegisterErr(t *testing.T) {
 		{"/", nil, "nil handler"},
 		{"/", http.HandlerFunc(nil), "nil handler"},
 		{"/{x", h, `parsing "/\{x": at offset 1: bad wildcard segment`},
-		{"/a", h, `conflicts with pattern.* \(registered at .*/shortmux_test.go:\d+`},
 	} {
 		t.Run(fmt.Sprintf("%s:%#v", test.pattern, test.handler), func(t *testing.T) {
 			err := mux.registerErr(test.pattern, test.handler)
