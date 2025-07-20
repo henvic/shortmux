@@ -42,3 +42,31 @@ func (idx *routingIndex) addPattern(pat *pattern) {
 		}
 	}
 }
+
+// hasPattern returns true if the pattern is already registered
+func (idx *routingIndex) hasPattern(p *pattern) bool {
+	// Check multis first
+	for _, existing := range idx.multis {
+		if existing.String() == p.String() {
+			return true
+		}
+	}
+
+	// Check segments - we only need to check one segment position to find duplicates
+	// since exact duplicates will appear in all the same segment positions
+	if len(p.segments) > 0 {
+		seg := p.segments[0]
+		key := routingIndexKey{pos: 0, s: ""}
+		if !seg.wild {
+			key.s = seg.s
+		}
+
+		for _, existing := range idx.segments[key] {
+			if existing.String() == p.String() {
+				return true
+			}
+		}
+	}
+
+	return false
+}

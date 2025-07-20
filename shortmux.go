@@ -432,6 +432,10 @@ func (mux *ServeMux) registerErr(patstr string, handler http.Handler) error {
 	mux.mu.Lock()
 	defer mux.mu.Unlock()
 	// No conflict checking - differently than http.ServeMux, allow overlapping patterns
+	// Allow overlapping patterns, but not exact duplicates
+	if mux.index.hasPattern(pat) {
+		return fmt.Errorf("exact pattern already registered")
+	}
 	mux.tree.addPattern(pat, handler)
 	mux.index.addPattern(pat)
 	return nil
