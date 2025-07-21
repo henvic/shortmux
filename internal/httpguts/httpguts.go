@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// httpguts from golang.org/x/net/http/httpguts
+// This file contains parts from package golang.org/x/net/http/httpguts
 
 package httpguts
 
