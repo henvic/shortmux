@@ -9,6 +9,7 @@ package shortmux
 import (
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"regexp"
 	"testing"
@@ -246,4 +247,51 @@ func BenchmarkServerMatch(b *testing.B) {
 		}
 	}
 	b.StopTimer()
+}
+
+func TestIntegrationWithHTTPServer(t *testing.T) {
+	mux := NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "root")
+	})
+	mux.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "world")
+	})
+	mux.HandleFunc("/foo/{bar}", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, "foo:%s", r.PathValue("bar"))
+	})
+	mux.HandleFunc("/multi/{some...}", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, "some:%s", r.PathValue("some"))
+	})
+	mux.HandleFunc("/redirect-dir/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, "dir")
+	})
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	tests := []struct {
+		path string
+		want string
+	}{
+		{"/", "root"},
+		{"/hello", "world"},
+		{"/foo/abc", "foo:abc"},
+		{"/multi/a/b/c/d", "some:a/b/c/d"},
+		{"/redirect-dir/", "dir"},
+		{"/redirect-dir", "dir"}, // check redirect; validate fix for nil pointer dereference
+	}
+
+	for _, tt := range tests {
+		resp, err := http.Get(server.URL + tt.path)
+		if err != nil {
+			t.Fatalf("GET %s: %v", tt.path, err)
+		}
+		defer resp.Body.Close()
+		got := make([]byte, 32)
+		n, _ := resp.Body.Read(got)
+		if string(got[:n]) != tt.want {
+			t.Errorf("GET %s: got %q, want %q", tt.path, string(got[:n]), tt.want)
+		}
+	}
 }
